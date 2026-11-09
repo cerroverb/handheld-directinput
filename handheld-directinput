@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# handheld-directinput - AYN Odin 3 / AYN Thor controller without InputPlumber.
+# The raw gamepad goes straight to SDL and Steam. The buttons service adds the
+# Odin 3 paddles (A and B) and the bottom right button (Quick Access Menu).
+# Usage: handheld-directinput on | off | status | uninstall
+set -u
+[ "$(id -u)" -eq 0 ] || exec sudo "$0" "$@"
+
+D=/var/lib/handheld-directinput
+RULES="65-handheld-directinput.rules 99-handheld-directinput-acl.rules"
+SERVICE=handheld-directinput.service
+
+# sysfs paths of the gamepad and paddle event nodes. sysfs, because a node
+# InputPlumber hid may not be in /dev/input.
+nodes() {
+    for e in /sys/class/input/event*; do
+        case "$(cat "$e/device/name" 2>/dev/null)" in
+        "AYN Odin3 Gamepad" | "AYN Odin2 Gamepad" | gpio-keys-paddles) echo "$e" ;;
+        esac
+    done
+}
+
+# Re-add the nodes so udev applies the current rules. SDL and Steam only pick
+# up a gamepad on an "add" event or at startup.
+readd() {
+    udevadm control --reload
+    for n in $(nodes); do udevadm trigger --action=add "$n"; done
+    udevadm settle
+}
+
+# On SELinux systems, let systemd run the binaries from /var/lib.
+label() {
+    if command -v getenforce >/dev/null && [ "$(getenforce)" != Disabled ]; then
+        chcon -t bin_t "$D/buttons" "$D/handheld-directinput"
+    fi
+    true
+}
+
+case "${1:-}" in
+on)
+    label
+    for r in $RULES; do cp "$D/$r" "/etc/udev/rules.d/$r"; done
+    systemctl mask --now inputplumber.service
+    # Hide rules a stopped InputPlumber can leave behind until reboot.
+    rm -f /run/udev/rules.d/*-inputplumber-hide-*.rules
+    readd
+    systemctl enable "$SERVICE"
+    # restart, so a reinstall replaces a running older binary
+    systemctl restart "$SERVICE"
+    ;;
+off)
+    systemctl disable --now "$SERVICE"
+    for r in $RULES; do rm -f "/etc/udev/rules.d/$r"; done
+    systemctl unmask inputplumber.service
+    readd
+    systemctl enable --now inputplumber.service
+    ;;
+status)
+    for r in $RULES; do
+        echo "rule $r: $([ -e "/etc/udev/rules.d/$r" ] && echo present || echo absent)"
+    done
+    echo "inputplumber: $(systemctl is-enabled inputplumber.service 2>/dev/null) $(systemctl is-active inputplumber.service)"
+    echo "buttons service: $(systemctl is-enabled "$SERVICE" 2>/dev/null) $(systemctl is-active "$SERVICE")"
+    for n in $(nodes); do
+        echo "$(cat "$n/device/name"): $(ls -l "/dev/input/${n##*/}" 2>&1)"
+    done
+    ;;
+uninstall)
+    "$0" off
+    rm -f "/etc/systemd/system/$SERVICE"
+    if [ -r "$D/linkpath" ]; then rm -f "$(cat "$D/linkpath")"; fi
+    systemctl daemon-reload
+    rm -rf "$D"
+    echo "handheld-directinput removed, InputPlumber is back on"
+    ;;
+*)
+    echo "usage: handheld-directinput on | off | status | uninstall" >&2
+    exit 1
+    ;;
+esac

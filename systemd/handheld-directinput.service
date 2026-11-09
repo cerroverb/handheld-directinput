@@ -1,0 +1,14 @@
+[Unit]
+Description=AYN Odin 3 / Thor paddles and Quick Access button without InputPlumber
+# Retry every second until the gamepad exists; no start rate limit.
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/var/lib/handheld-directinput/buttons
+Restart=always
+RestartSec=1
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=50
+
+[Install]
+WantedBy=multi-user.target

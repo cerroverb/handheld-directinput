@@ -1,0 +1,9 @@
+# handheld-directinput: hand the raw AYN gamepad to SDL and Steam without InputPlumber.
+# "AYN Odin3 Gamepad" is the Odin 3, "AYN Odin2 Gamepad" is the Thor.
+# Runs after 60-input-id.rules, which sets the ID_INPUT_* classes, and before
+# 70-uaccess.rules and 73-seat-late.rules, which turn the uaccess tag into an ACL.
+# SDL only opens nodes udev marks as joysticks. The driver's BTN_BACK also earns
+# ID_INPUT_MOUSE, which would move the desktop cursor with the left stick.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="AYN Odin3 Gamepad|AYN Odin2 Gamepad", ENV{ID_INPUT_JOYSTICK}="1", ENV{ID_INPUT_MOUSE}="", ENV{INPUTPLUMBER_SHARED_GAMEPAD}="", ENV{LIBINPUT_IGNORE_DEVICE}="1", GROUP="input", MODE="0660", TAG+="uaccess"
+# The Odin 3 paddles are written into the gamepad by the buttons service, so hide them as a second controller.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="gpio-keys-paddles", ENV{ID_INPUT_JOYSTICK}="", ENV{LIBINPUT_IGNORE_DEVICE}="1"

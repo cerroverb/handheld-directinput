@@ -1,0 +1,31 @@
+# Builds the static aarch64 buttons binary and publishes a release for every v* tag.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the aarch64 cross compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross shellcheck
+      - name: Check
+        run: |
+          shellcheck install.sh handheld-directinput
+          make CFLAGS="-O2 -Wall -Wextra -Werror"
+      - name: Build
+        run: make release VERSION="$GITHUB_REF_NAME" CFLAGS="-O2 -Wall -Wextra -Werror"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/handheld-directinput-aarch64.tar.gz \
+            dist/handheld-directinput-aarch64.tar.gz.sha256 \
+            --title "$GITHUB_REF_NAME" --notes-from-tag
