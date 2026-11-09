@@ -1,7 +1,14 @@
-# Builds the static aarch64 buttons binary and publishes a release for every v* tag.
+# Builds the static aarch64 buttons binary and publishes a release.
+# Run it from the Actions tab with a version (e.g. v1.0.1), or push a v* tag.
+# Release notes come from that version's section in CHANGELOG.md.
 name: release
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. v1.0.1"
+        required: true
   push:
     tags: ["v*"]
 
@@ -11,6 +18,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ inputs.version || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
       - name: Install the aarch64 cross compiler
@@ -20,12 +29,16 @@ jobs:
           shellcheck install.sh handheld-directinput
           make CFLAGS="-O2 -Wall -Wextra -Werror"
       - name: Build
-        run: make release VERSION="$GITHUB_REF_NAME" CFLAGS="-O2 -Wall -Wextra -Werror"
+        run: make release VERSION="$VERSION" CFLAGS="-O2 -Wall -Wextra -Werror"
+      - name: Release notes
+        run: |
+          awk -v v="## $VERSION" '$0 == v {f = 1; next} /^## / {f = 0} f' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "no section for $VERSION in CHANGELOG.md"; exit 1; }
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "$VERSION" \
             dist/handheld-directinput-aarch64.tar.gz \
             dist/handheld-directinput-aarch64.tar.gz.sha256 \
-            --title "$GITHUB_REF_NAME" --notes-from-tag
+            --target "$GITHUB_SHA" --title "$VERSION" --notes-file notes.md

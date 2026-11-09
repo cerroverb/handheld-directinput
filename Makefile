@@ -4,7 +4,7 @@
 VERSION ?= dev
 CFLAGS ?= -O2 -Wall -Wextra
 AARCH64_CC ?= aarch64-linux-gnu-gcc
-FILES = LICENSE README.md Makefile install.sh handheld-directinput src udev systemd
+FILES = LICENSE README.md CHANGELOG.md Makefile install.sh handheld-directinput src udev systemd
 
 all: build/buttons
 
